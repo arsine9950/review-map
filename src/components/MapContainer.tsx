@@ -36,13 +36,15 @@ const MapContainer = ({ targetLoc, reviews = [], onMarkerClick, onMapClick }: Ma
       const map = new naver.maps.Map(mapElement.current, mapOptions);
       mapRef.current = map;
 
+      // 지도 빈 곳 클릭 이벤트
       naver.maps.Event.addListener(map, 'click', (e: any) => {
-        setExpandedGroupId(null);
+        setExpandedGroupId(null); // 그룹 펼쳐진 거 닫기
 
         if (onMapClick) {
           const lat = e.coord.lat();
           const lng = e.coord.lng();
 
+          // 좌표 -> 주소 변환 (Reverse Geocoding)
           naver.maps.Service.reverseGeocode({
             coords: e.coord,
             orders: [
@@ -70,6 +72,7 @@ const MapContainer = ({ targetLoc, reviews = [], onMarkerClick, onMapClick }: Ma
         }
       });
 
+      // 내 위치 추적 (파란 점)
       if (navigator.geolocation) {
         navigator.geolocation.watchPosition(
           (position) => {
@@ -96,7 +99,7 @@ const MapContainer = ({ targetLoc, reviews = [], onMarkerClick, onMapClick }: Ma
     }
   }, []); 
 
-  // 2. 지도 이동
+  // 2. 지도 이동 (targetLoc 변경 시)
   useEffect(() => {
     if (mapRef.current && targetLoc && targetLoc.lat && targetLoc.lng) {
       const { naver } = window as any;
@@ -109,16 +112,18 @@ const MapContainer = ({ targetLoc, reviews = [], onMarkerClick, onMapClick }: Ma
     }
   }, [targetLoc]);
 
-  // 3. 거리 기반 그룹화 및 렌더링
+  // 3. 마커 렌더링 (핵심 로직)
   useEffect(() => {
     if (!mapRef.current || !window.naver) return;
     const { naver } = window as any;
 
+    // 기존 마커 초기화
     markersRef.current.forEach(m => m.setMap(null));
     polylinesRef.current.forEach(p => p.setMap(null));
     markersRef.current = [];
     polylinesRef.current = [];
 
+    // 거리 기반 그룹화
     const groups: { lat: number; lng: number; items: any[] }[] = [];
     const DISTANCE_THRESHOLD = 0.0002; 
 
@@ -136,6 +141,7 @@ const MapContainer = ({ targetLoc, reviews = [], onMarkerClick, onMapClick }: Ma
       }
     });
 
+    // 마커 생성 루프
     groups.forEach((group, groupIndex) => {
       const isExpanded = groupIndex === expandedGroupId;
       const baseLat = group.lat;
@@ -143,11 +149,12 @@ const MapContainer = ({ targetLoc, reviews = [], onMarkerClick, onMapClick }: Ma
       const items = group.items;
       const count = items.length;
 
+      // [케이스 1] 겹친 마커가 아니거나(1개), 그룹이 접혀있을 때 -> 대표 마커 하나만 표시
       if (count === 1 || !isExpanded) {
         let contentHTML = '';
 
         if (count > 1) {
-          // ✅ [수정] 그룹 마커: preventDefault() 추가 (브라우저 기본 동작 차단)
+          // (A) 그룹 마커 (+N)
           contentHTML = `
             <div 
               onmousedown="event.preventDefault(); event.stopPropagation();" 
@@ -155,15 +162,15 @@ const MapContainer = ({ targetLoc, reviews = [], onMarkerClick, onMapClick }: Ma
               style="
                 width: 40px; height: 40px; background: #3182F6; border-radius: 50%; border: 3px solid white;
                 color: white; font-weight: bold; font-size: 14px; display: flex; align-items: center; justify-content: center;
-                box-shadow: 0 4px 10px rgba(0,0,0,0.3); cursor: pointer;
+                box-shadow: 0 4px 10px rgba(0,0,0,0.3); cursor: pointer; pointer-events: auto;
             ">
               +${count}
             </div>
           `;
         } else {
-          // ✅ [수정] 단일 마커: preventDefault() 추가
+          // (B) 단일 마커 (일반 핀)
           const review = items[0];
-          const placeName = review.name || review.placeName || '장소명 없음';
+          const placeName = review.placeName || review.name || '장소명 없음';
           const rating = review.rating ? parseFloat(review.rating).toFixed(1) : '0.0';
           const reviewCount = review.reviewCount || 1;
           
@@ -177,7 +184,7 @@ const MapContainer = ({ targetLoc, reviews = [], onMarkerClick, onMapClick }: Ma
             <div 
               onmousedown="event.preventDefault(); event.stopPropagation();" 
               ontouchstart="event.preventDefault(); event.stopPropagation();"
-              style="position:relative; cursor:pointer;"
+              style="position:relative; cursor:pointer; pointer-events: auto;"
             >
               <div style="font-size:24px; filter:drop-shadow(0 2px 5px rgba(0,0,0,0.3)); text-align:center;">📍</div>
               <div style="
@@ -209,31 +216,47 @@ const MapContainer = ({ targetLoc, reviews = [], onMarkerClick, onMapClick }: Ma
           }
         });
 
+        // 클릭 이벤트 리스너
         naver.maps.Event.addListener(marker, 'click', () => {
           if (count > 1) {
+            // 그룹이면 줌인 + 펼치기
             mapRef.current.setZoom(mapRef.current.getZoom() < 16 ? 17 : mapRef.current.getZoom());
             mapRef.current.panTo(new naver.maps.LatLng(baseLat, baseLng));
             setExpandedGroupId(groupIndex);
           } else {
-            if (onMarkerClick) onMarkerClick(items[0]);
+            // 단일 마커면 상세창 열기
+            if (onMarkerClick) {
+              const item = items[0];
+              // ✅ [핵심 수정] App.tsx가 placeName을 찾으므로, 혹시 없으면 name을 복사해서 넣어줌
+              const safeItem = { 
+                ...item, 
+                placeName: item.placeName || item.name // 데이터 안전장치
+              };
+              console.log("MapContainer: 마커 클릭됨", safeItem);
+              onMarkerClick(safeItem);
+            }
           }
         });
 
         markersRef.current.push(marker);
 
       } else {
+        // [케이스 2] 그룹이 펼쳐졌을 때 (Spiderfy)
+        
+        // (A) 중앙점 (누르면 닫힘)
         const centerMarker = new naver.maps.Marker({
           position: new naver.maps.LatLng(baseLat, baseLng),
           map: mapRef.current,
           zIndex: 40,
           icon: {
-            content: `<div style="width:10px; height:10px; background:#333; border-radius:50%; opacity:0.5;"></div>`,
+            content: `<div style="width:10px; height:10px; background:#333; border-radius:50%; opacity:0.5; cursor:pointer;"></div>`,
             anchor: new naver.maps.Point(5, 5),
           }
         });
         naver.maps.Event.addListener(centerMarker, 'click', () => setExpandedGroupId(null));
         markersRef.current.push(centerMarker);
 
+        // (B) 주변으로 퍼지는 개별 마커들
         const RADIUS = 0.0006; 
         
         items.forEach((review, index) => {
@@ -241,6 +264,7 @@ const MapContainer = ({ targetLoc, reviews = [], onMarkerClick, onMapClick }: Ma
           const targetLat = baseLat + (Math.sin(angle) * RADIUS * 0.7);
           const targetLng = baseLng + (Math.cos(angle) * RADIUS);
 
+          // 점선 그리기
           const line = new naver.maps.Polyline({
             map: mapRef.current,
             path: [new naver.maps.LatLng(baseLat, baseLng), new naver.maps.LatLng(targetLat, targetLng)],
@@ -248,7 +272,7 @@ const MapContainer = ({ targetLoc, reviews = [], onMarkerClick, onMapClick }: Ma
           });
           polylinesRef.current.push(line);
 
-          const placeName = review.name || review.placeName || '장소명 없음';
+          const placeName = review.placeName || review.name || '장소명 없음';
           const rating = review.rating ? parseFloat(review.rating).toFixed(1) : '0.0';
           
           let catIcon = '📍';
@@ -257,7 +281,7 @@ const MapContainer = ({ targetLoc, reviews = [], onMarkerClick, onMapClick }: Ma
           else if (cat.includes('카페') || cat.includes('디저트')) catIcon = '☕';
           else if (cat.includes('요리주점') || cat.includes('주점') || cat.includes('바')) catIcon = '🍺';
 
-          // ✅ [수정] 펼쳐진 마커: preventDefault() 추가
+          // 개별 마커 HTML
           const marker = new naver.maps.Marker({
             position: new naver.maps.LatLng(targetLat, targetLng),
             map: mapRef.current,
@@ -267,7 +291,7 @@ const MapContainer = ({ targetLoc, reviews = [], onMarkerClick, onMapClick }: Ma
                 <div 
                   onmousedown="event.preventDefault(); event.stopPropagation();" 
                   ontouchstart="event.preventDefault(); event.stopPropagation();"
-                  style="position:relative; cursor:pointer;"
+                  style="position:relative; cursor:pointer; pointer-events: auto;"
                 >
                   <div style="
                     background:white; padding:5px 8px; border-radius:16px;
@@ -284,11 +308,21 @@ const MapContainer = ({ targetLoc, reviews = [], onMarkerClick, onMapClick }: Ma
             }
           });
 
+          // 마커 hover 시 z-index 올리기
           marker.addListener('mouseover', () => marker.setZIndex(200));
           marker.addListener('mouseout', () => marker.setZIndex(100 + index));
 
+          // 개별 마커 클릭 이벤트
           naver.maps.Event.addListener(marker, 'click', () => {
-             if (onMarkerClick) onMarkerClick(review);
+             if (onMarkerClick) {
+                // ✅ [핵심 수정] 여기도 안전하게 placeName 보장
+                const safeItem = { 
+                  ...review, 
+                  placeName: review.placeName || review.name 
+                };
+                console.log("MapContainer: 펼친 마커 클릭됨", safeItem);
+                onMarkerClick(safeItem);
+             }
           });
 
           markersRef.current.push(marker);

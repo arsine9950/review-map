@@ -21,6 +21,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, collection, addDoc, query, onSnapshot, orderBy, deleteDoc, setDoc, updateDoc } from 'firebase/firestore';
 import './App.css';
 
+// 거리 계산 함수 (미터 단위)
 const getDistance = (lat1: number, lng1: number, lat2: number, lng2: number) => {
   const R = 6371e3; 
   const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -49,7 +50,7 @@ function App() {
 
   const [initChecking, setInitChecking] = useState(true);
 
-  // UI 상태
+  // UI 상태 관리
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [selectedPlace, setSelectedPlace] = useState<any | null>(null); 
   const [isReviewOpen, setIsReviewOpen] = useState(false); 
@@ -57,20 +58,18 @@ function App() {
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [isTitleModalOpen, setIsTitleModalOpen] = useState(false);
   const [isAchievementOpen, setIsAchievementOpen] = useState(false); 
-
-  const [celebrationData, setCelebrationData] = useState<{ id: string; title: string; type: string }[] | null>(null);
-
   const [isNameInputOpen, setIsNameInputOpen] = useState(false);
+  const [isDetailOpen, setIsDetailOpen] = useState(false); // 상세창 열림 상태
+
+  // 데이터 상태 관리
+  const [celebrationData, setCelebrationData] = useState<{ id: string; title: string; type: string }[] | null>(null);
   const [pendingLocation, setPendingLocation] = useState<{ lat: number; lng: number; address: string } | null>(null);
-
-  const [selectedPlaceReviews, setSelectedPlaceReviews] = useState<any[]>([]);
-  const [isDetailOpen, setIsDetailOpen] = useState(false);
-
+  const [selectedPlaceReviews, setSelectedPlaceReviews] = useState<any[]>([]); // 선택된 장소의 리뷰 목록
   const [targetLocation, setTargetLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [currentGPS, setCurrentGPS] = useState<{ lat: number; lng: number } | null>(null);
   const [reviews, setReviews] = useState<any[]>([]);
 
-  // 1. 초기 로그인 체크 (여기서는 데이터 로딩만 함)
+  // 1. 초기 로그인 및 사용자 정보 로드
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
@@ -97,8 +96,6 @@ function App() {
               rank: mockRank
             });
             setIsLoggedIn(true);
-            
-            // ❌ [수정됨] 여기서 가이드 여는 코드 삭제함 (아래 useEffect로 이동)
         }
       } else {
         setIsLoggedIn(false);
@@ -106,6 +103,7 @@ function App() {
       setInitChecking(false);
     });
 
+    // 실시간 GPS 추적
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
         setCurrentGPS({ lat: pos.coords.latitude, lng: pos.coords.longitude });
@@ -120,7 +118,7 @@ function App() {
     };
   }, []);
 
-  // ✅ [추가됨] 1-2. 로그인 완료 시점에 딱 한 번만 가이드 체크
+  // 1-2. 로그인 후 가이드 노출 여부 확인
   useEffect(() => {
     if (isLoggedIn && !isGuideOpen) {
       const hasSeen = localStorage.getItem('hasSeenGuide');
@@ -128,9 +126,9 @@ function App() {
         setIsGuideOpen(true);
       }
     }
-  }, [isLoggedIn]); // isLoggedIn 값이 true로 변할 때만 실행
+  }, [isLoggedIn]);
 
-  // 2. 리뷰 데이터 구독
+  // 2. 전체 리뷰 데이터 실시간 구독
   useEffect(() => {
     const q = query(collection(db, "reviews"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -140,7 +138,7 @@ function App() {
     return () => unsubscribe();
   }, []);
 
-  // 칭호 변경 핸들러
+  // 칭호 변경
   const handleChangeTitle = async (newTitle: string) => {
       if (!myProfile) return;
       try {
@@ -155,9 +153,11 @@ function App() {
     setIsGuideOpen(true); 
   };
 
+  // 지도 빈 곳 클릭 (새 리뷰 작성 시도)
   const handleMapClick = (location: { lat: number; lng: number; address: string }) => {
     setTargetLocation({ lat: location.lat, lng: location.lng });
     
+    // 클릭 실수 방지를 위한 짧은 지연 시간 및 확인
     setTimeout(() => {
         if (!window.confirm(`"${location.address}"\n이 위치에 리뷰를 남기시겠습니까?`)) return;
         setPendingLocation(location);
@@ -165,6 +165,7 @@ function App() {
     }, 100);
   };
 
+  // 장소 이름 입력 후 리뷰 작성창 열기
   const handleNameSubmit = (enteredName: string) => {
     if (!pendingLocation) return;
     
@@ -180,6 +181,7 @@ function App() {
     setIsReviewOpen(true);     
   };
 
+  // 리뷰 저장 로직 (경험치, 업적 체크 포함)
   const handleSaveReview = async (reviewData: any) => {
     if (!selectedPlace || !myProfile) return;
     if (!currentGPS) { alert("GPS를 켜주세요."); return; }
@@ -187,10 +189,11 @@ function App() {
     const finalPlaceName = reviewData.placeName || selectedPlace.name;
 
     const distance = getDistance(currentGPS.lat, currentGPS.lng, selectedPlace.lat, selectedPlace.lng);
+    // 거리 제한 (50km)
     if (distance > 50000) { alert(`너무 멉니다 (약 ${Math.round(distance)}m).`); return; }
 
+    // 중복 및 쿨타임 체크
     const existingReview = reviews.find(r => r.userId === myProfile.uid && r.placeName === finalPlaceName);
-
     if (!existingReview) {
       const myLastReview = reviews.filter(r => r.userId === myProfile.uid)[0];
       if (myLastReview) {
@@ -202,6 +205,7 @@ function App() {
       }
     }
 
+    // 경험치 및 레벨 계산
     let newExp = myProfile.exp || 0;
     if (!existingReview) newExp += 10;
     const newLevelInfo = getLevelInfo(newExp);
@@ -235,6 +239,7 @@ function App() {
       const myReviews = reviews.filter(r => r.userId === myProfile.uid);
       if (!existingReview) myReviews.push(newReviewData); 
 
+      // 업적 체크
       const currentTitles = myProfile.availableTitles || ['초보 모험가'];
       const currentAchievements = myProfile.achievements || [];
 
@@ -247,6 +252,7 @@ function App() {
           newLevelInfo.level    
       );
 
+      // 사용자 정보 업데이트
       if (!existingReview || isChanged) {
          const updates: any = { exp: newExp, level: newLevelInfo.level };
          if (isChanged) {
@@ -269,6 +275,7 @@ function App() {
       if (isLevelUp) msg += `\n🎉 Level ${newLevelInfo.level} 승급!`;
       alert(msg);
 
+      // 새 업적 달성 시 모달 데이터 세팅
       if (isChanged) {
         const oldIds = currentAchievements.map(a => a.id);
         const newItems = updatedAchievements
@@ -297,23 +304,35 @@ function App() {
     }
   };
 
+  // 내 위치 버튼
   const handleMyLocationClick = () => {
     if (currentGPS) setTargetLocation({ lat: currentGPS.lat, lng: currentGPS.lng });
     else alert("GPS를 켜주세요.");
   };
 
+  // 히스토리 항목 클릭 시 지도 이동
   const handleHistoryItemClick = (review: any) => {
     setTargetLocation({ lat: review.lat, lng: review.lng });
     setIsHistoryOpen(false);
   };
 
+  // ✅ [중요] 마커 클릭 핸들러 (상세창 열기)
   const handleMarkerClick = (clickedReview: any) => {
+    console.log("App.tsx: 마커 클릭됨", clickedReview); // 디버깅용 로그
+
+    if (!clickedReview || !clickedReview.placeName) return;
+
+    // 해당 장소 이름으로 된 리뷰들만 필터링해서 상세창에 전달
     const placeReviews = reviews.filter(r => r.placeName === clickedReview.placeName);
+    
+    // 최신순 정렬
     placeReviews.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    
     setSelectedPlaceReviews(placeReviews);
-    setIsDetailOpen(true);
+    setIsDetailOpen(true); // 상세창 열기
   };
 
+  // 리뷰 삭제
   const handleDeleteReview = async (reviewId: string) => {
       try {
         await deleteDoc(doc(db, "reviews", reviewId));
@@ -333,6 +352,7 @@ function App() {
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
       
+      {/* 지도 컨테이너: 마커 클릭 이벤트를 받아서 handleMarkerClick 실행 */}
       <MapContainer 
         targetLoc={targetLocation} 
         reviews={reviews} 
@@ -340,6 +360,7 @@ function App() {
         onMapClick={handleMapClick}
       />
       
+      {/* 축하 모달 */}
       {celebrationData && (
         <CelebrationModal 
           newAchievements={celebrationData} 
@@ -347,6 +368,7 @@ function App() {
         />
       )}
 
+      {/* 장소 이름 입력 모달 */}
       {isNameInputOpen && pendingLocation && (
         <NameInputModal 
           address={pendingLocation.address}
@@ -355,6 +377,7 @@ function App() {
         />
       )}
 
+      {/* 닉네임 설정 모달 (비로그인 시) */}
       {!isLoggedIn && <NicknameModal onLoginSuccess={() => window.location.reload()} />}
       
       {/* 가이드 모달 */}
@@ -365,6 +388,7 @@ function App() {
         }} />
       )}
 
+      {/* 메인 UI (버튼들) */}
       {isLoggedIn && myProfile && !isReviewOpen && (
         <MainUI 
           profile={myProfile} 
@@ -378,6 +402,7 @@ function App() {
         />
       )}
 
+      {/* 칭호 모달 */}
       {isTitleModalOpen && myProfile && (
         <TitleModal 
             myTitles={myProfile.availableTitles || []}
@@ -387,6 +412,7 @@ function App() {
         />
       )}
 
+      {/* 업적 모달 */}
       {isAchievementOpen && myProfile && (
         <AchievementModal 
             onClose={() => setIsAchievementOpen(false)}
@@ -394,6 +420,7 @@ function App() {
         />
       )}
 
+      {/* 검색 모달 */}
       {isSearchOpen && (
         <SearchModal 
           onClose={() => setIsSearchOpen(false)}
@@ -408,11 +435,13 @@ function App() {
             setTargetLocation(newPos);
             setSelectedPlace({ ...place, lat: newPos.lat, lng: newPos.lng });
             setIsSearchOpen(false);
+            // 검색 후 지도 이동 -> 조금 뒤에 리뷰 작성창 열기
             setTimeout(() => setIsReviewOpen(true), 600); 
           }}
         />
       )}
 
+      {/* 리뷰 작성 모달 */}
       {isReviewOpen && selectedPlace && (
         <ReviewModal 
           place={selectedPlace}
@@ -421,6 +450,7 @@ function App() {
         />
       )}
 
+      {/* ✅ 리뷰 상세 보기 모달 (마커 클릭 시 열림) */}
       {isDetailOpen && selectedPlaceReviews.length > 0 && (
         <ReviewDetailModal 
           reviews={selectedPlaceReviews}
@@ -431,6 +461,7 @@ function App() {
         />
       )}
 
+      {/* 내 기록 모달 */}
       {isHistoryOpen && myProfile && (
         <MyHistoryModal 
           reviews={reviews.filter(r => r.userId === myProfile.uid)}
