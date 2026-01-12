@@ -1,0 +1,129 @@
+/* src/components/CelebrationModal.css */
+
+.celebration-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.celebration-card {
+  background: white;
+  width: 90%;
+  max-width: 400px;
+  border-radius: 24px;
+  padding: 40px 20px;
+  text-align: center;
+  position: relative;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+  animation: popUp 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  overflow: visible;
+}
+
+/* 텍스트 스타일 */
+.celebration-title {
+  font-size: 24px;
+  font-weight: 900;
+  color: #3182F6;
+  margin-bottom: 8px;
+}
+
+.celebration-desc {
+  font-size: 15px;
+  color: #555;
+  margin-bottom: 20px;
+}
+
+.achievement-item {
+  background: #f0f7ff;
+  color: #3182F6;
+  padding: 12px;
+  border-radius: 12px;
+  font-weight: bold;
+  margin-bottom: 8px;
+  border: 1px solid #cce4ff;
+  animation: slideIn 0.5s ease-out forwards;
+  opacity: 0;
+}
+
+/* ================= 애니메이션 키프레임 ================= */
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes popUp { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+/* 🎆 폭죽 효과 (CSS Particles) */
+.firework {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  animation: explode 1s ease-out infinite;
+}
+
+@keyframes explode {
+  0% { transform: scale(0); opacity: 1; box-shadow: 0 0 0 0 #ff0000; }
+  100% { 
+    transform: scale(20); 
+    opacity: 0; 
+    box-shadow: 
+      -100px -100px 0 #ffeb3b, 
+      100px -100px 0 #ff0000, 
+      -100px 100px 0 #2196f3, 
+      100px 100px 0 #4caf50;
+  }
+}
+
+/* 📦 상자 애니메이션 */
+.treasure-box {
+  font-size: 80px;
+  margin-bottom: 20px;
+  display: inline-block;
+  cursor: pointer;
+}
+
+.box-shake {
+  animation: shake 0.5s infinite;
+}
+
+.box-open {
+  animation: openBox 0.5s forwards;
+}
+
+@keyframes shake {
+  0% { transform: rotate(0deg); }
+  25% { transform: rotate(-10deg); }
+  50% { transform: rotate(10deg); }
+  75% { transform: rotate(-10deg); }
+  100% { transform: rotate(0deg); }
+}
+
+@keyframes openBox {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+/* 확인 버튼 */
+.confirm-btn {
+  background: #3182F6;
+  color: white;
+  border: none;
+  padding: 12px 30px;
+  border-radius: 30px;
+  font-size: 16px;
+  font-weight: bold;
+  margin-top: 20px;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+.confirm-btn:active { transform: scale(0.95); }

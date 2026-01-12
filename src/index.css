@@ -1,0 +1,27 @@
+/* src/index.css */
+
+/* 1. 모든 태그에 강제로 적용 (박스 사이즈 계산 고정) */
+*, *::before, *::after {
+  box-sizing: border-box !important;
+}
+
+/* 2. PC 배경 및 모바일 컨테이너 설정 */
+body {
+  margin: 0;
+  padding: 0;
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  background-color: #f0f2f5; /* PC 배경색 */
+  overflow-x: hidden; /* 가로 스크롤 방지 */
+}
+
+#root {
+  width: 100%;
+  max-width: 480px; /* 모바일 사이즈 고정 */
+  height: 100vh;
+  background-color: white;
+  position: relative;
+  box-shadow: 0 0 20px rgba(0,0,0,0.1);
+  margin: 0 auto; /* 중앙 정렬 */
+}
